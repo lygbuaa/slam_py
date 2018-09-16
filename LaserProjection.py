@@ -4,7 +4,6 @@ import numpy as np
 import math
 import rospy, time
 from glog import get_glogger
-from geometry_msgs.msg import Pose
 
 glogger = get_glogger(0, __file__)
 
@@ -17,47 +16,44 @@ class LaserProjection:
     angle_increment = 0
     time_increment = 0
     scan_time = 0
-    range_min = 0
-    range_max = 60
+    range_min = 0.5
+    range_max = 15.0
     points_3d = []
-    points_2d = []
-    origin = None
+    points_2d = None
 
-    def __init__(self, origin):
-        self.origin = origin
-        # print self.origin
-        # self.points_3d.append((0, 0, 0))
-        # self.points_3d.append((1, 0, 0))
-        # self.points_3d.append((2, 0, 0))
-        # print self.points_3d
-        # self.points_2d = np.mat(self.points_3d, dtype=np.float32)[: , 0:2].tolist()
-        # print self.points_2d
+    def __init__(self):
+        range_min = 0.5
+        range_max = 15.0
 
-    def project(self, scan):
+    # origin: tuple(0, 0, 0),  rotation: np.matrix(3,3)
+    def project(self, scan, origin=(0, 0, 0), dcm=np.eye(3)):
         sita = scan.angle_min
         del self.points_3d[:]
-        # del self.points_2d[:]
-        # glogger.info("projection start, id = %d", scan.header.seq)
-        # t_start = time.time()
         for r in scan.ranges:
+            if r < self.range_min or r > self.range_max:
+                continue
             point = (r*math.cos(sita), r*math.sin(sita), 0)
-            self.points_3d.append(point)
+            point = np.matmul(dcm, point)
+            # limit laser beam height to (-0.5, 0.5)m
+            if point[2] < -0.5 or point[2] > 0.5:
+                continue
+            point = np.add(point, origin)
+            self.points_3d.append(point.tolist())
             sita += scan.angle_increment
-        # glogger.info( "projection done, time consume = %f us", (time.time() - t_start)*1e6 )
         self.points_2d = np.mat(self.points_3d, dtype=np.float32)[: , 0:2]
         return self.points_2d
 
 if __name__ == '__main__':
-    origin = Pose()
-    origin.position.x = 1
-    origin.position.y = 2
-    origin.position.z = 3
-    origin.orientation.x = 0.1
-    origin.orientation.y = 0.2
-    origin.orientation.z = 0.3
-    origin.orientation.w = 0.4
-
     # glogger.info("pose: %f",pose.position.x)
-    lp = LaserProjection(origin)
+    # lp = LaserProjection(origin)
     # sita = math.pi / 6
     # print math.cos(sita), math.sin(sita)
+
+    x1 = np.eye(3)
+    print "x1", x1
+    x2 = (1,2,3)
+    print "x2", x2
+    x3 = np.add(x1, x2)
+    print "x3", x3
+    x4 = np.matmul(x1, x2)
+    print "x4", x4
