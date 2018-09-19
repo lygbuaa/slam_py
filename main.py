@@ -9,34 +9,41 @@ from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
 from LaserProjection import LaserProjection
 from glog import get_glogger
 from Plotter import Plotter
+from DataContainer import DataContainer
+from ICP import SM_ICP
 
 # geometry_msgs/PoseWithCovarianceStamped.msg
 def pose_callback(msg):
-    global plotter, pose_3d, dcm, yaw
+    global plotter, data
     # glogger.info("get pose, position = (%f, %f, %f)", msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z)
-    pose_3d = (msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z)
+    data.scan_origin = (msg.pose.pose.position.x, msg.pose.pose.position.y, msg.pose.pose.position.z)
     # dcm = msg.pose.pose.orientation
     q = [msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w]
-    euler = tf.transformations.euler_from_quaternion(q)
+    data.euler = tf.transformations.euler_from_quaternion(q)
     dcm = tf.transformations.quaternion_matrix(q)
-    yaw = euler[2]
-    pose_2d = (msg.pose.pose.position.x, msg.pose.pose.position.y, yaw)
-    plotter.plot_trajectory( pose_2d )
+    data.dcm = dcm[0:3, 0:3]
+    yaw = data.euler[2]
+    data.pose_2d = (msg.pose.pose.position.x, msg.pose.pose.position.y, yaw)
+    plotter.plot_trajectory( data.pose_2d )
     return 0
 
 # sensor_msgs/LaserScan.msg
 def scan_callback(msg):
-    global plotter, pose_3d, dcm, tt
-    tt = rospy.Time(msg.header.stamp.secs, msg.header.stamp.nsecs)
+    global plotter, dt, data, icp
+    data.scan_ts = rospy.Time(msg.header.stamp.secs, msg.header.stamp.nsecs)
     lp = LaserProjection()
-    if msg.header.seq % 25 == 0:
-        t_start = time.time()
+    t_start = time.time()
+    if msg.header.seq % 50 == 0:
         glogger.info("projection start, id = %d", msg.header.seq)
-    points = lp.project(msg, pose_3d, dcm[0:3, 0:3])
+    data.points_2d = lp.project(msg, data.scan_origin, data.dcm, downsample = 5)
     plotter.set_angle(msg.angle_min, msg.angle_max)
-    plotter.plot_scan(points)
-    if msg.header.seq % 25 == 0:
-        glogger.info( "%d points projected, time consume = %f us", points.shape[0], (time.time() - t_start)*1e6 )
+    plotter.plot_scan(data.points_2d)
+    pose_2d = icp.match(data.points_2d)
+    plotter.plot_trajectory2( pose_2d )
+    dt += (time.time() - t_start)*1e6 # time consume in us
+    if msg.header.seq % 50 == 0:
+        glogger.info( "%d points projected, time consume = %f us", data.points_2d.shape[0], dt/50.0 )
+        dt = 0
 
 def listener():
     rospy.Subscriber("/scan", LaserScan, scan_callback)
@@ -45,16 +52,15 @@ def listener():
     rospy.spin()
 
 def tf_broadcaster():
-    global tt, dcm, yaw
+    global data
     tf_ = tf.TransformListener()
     time.sleep(1)
     while not rospy.is_shutdown():
         try:
-            tf_.waitForTransform("/nav", "/base_link", tt, rospy.Duration.from_sec(0.5))
+            tf_.waitForTransform("/nav", "/base_link", data.scan_ts, rospy.Duration.from_sec(0.5))
             (trans,rot) = tf_.lookupTransform("/nav", "/base_link", tt)
-            # dcm = tf.transformations.quaternion_matrix(rot)
-            euler = tf.transformations.euler_from_quaternion(rot)
-            # yaw = euler[2]
+            # data.dcm = tf.transformations.quaternion_matrix(rot)
+            data.euler = tf.transformations.euler_from_quaternion(rot)
             #print "trans:", trans
             #print "q:", rot
             #print "matrix", tf.transformations.quaternion_matrix(rot)
@@ -64,16 +70,16 @@ def tf_broadcaster():
     glogger.info("tf broadcaster quit.")
 
 if __name__ == '__main__':
-    global plotter, pose_3d, dcm, tt, yaw
-    pose_3d = (0, 0, 0)
-    dcm = np.eye(3)
-    yaw = 0
+    global plotter, dt, data, icp
+    data = DataContainer()
+    icp = SM_ICP()
+    dt = 0
     glogger = get_glogger(0, __file__)
     rospy.init_node('slam_py', anonymous=True)
     tt = rospy.Time.now()
     sub1 = threading.Thread(target = listener, args = ())
     sub1.start()
-    sub2 = threading.Thread(target = tf_broadcaster, args = ())
-    sub2.start()
+    # sub2 = threading.Thread(target = tf_broadcaster, args = ())
+    # sub2.start()
     plotter = Plotter()
     plotter.show()
