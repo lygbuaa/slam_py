@@ -143,9 +143,10 @@ class SM_ICP:
     def match(self, points_2d):
         if self.last_points_2d is not None:
             dcm_inc, trans_inc = self.icp(self.last_points_2d, points_2d)
-            self.dcm_2d = np.matmul(self.dcm_2d, dcm_inc)
-            self.pose_2d[0] += trans_inc[0]
-            self.pose_2d[1] += trans_inc[1]
+            self.dcm_2d = np.matmul(dcm_inc, self.dcm_2d)
+            trans_map = np.matmul(self.dcm_2d.T, -1*trans_inc)
+            self.pose_2d[0] += trans_map[0]
+            self.pose_2d[1] += trans_map[1]
             self.pose_2d[2] = np.arcsin(self.dcm_2d[1, 0])
         self.last_points_2d = points_2d
         return self.pose_2d

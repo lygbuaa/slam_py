@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import rospy, time, math, tf
-import threading
+import threading, sys
 from time import ctime,sleep
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Pose, PoseWithCovarianceStamped
@@ -10,6 +10,7 @@ from LaserProjection import LaserProjection
 from glog import get_glogger
 from Plotter import Plotter
 from DataContainer import DataContainer
+sys.path.append("./icp")
 from ICP import SM_ICP
 
 # geometry_msgs/PoseWithCovarianceStamped.msg
