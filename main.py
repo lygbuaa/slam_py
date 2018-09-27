@@ -11,7 +11,9 @@ from glog import get_glogger
 from Plotter import Plotter
 from DataContainer import DataContainer
 sys.path.append("./icp")
+sys.path.append("./csm")
 from ICP import SM_ICP
+from CSM import CSM_ICP
 
 # geometry_msgs/PoseWithCovarianceStamped.msg
 def pose_callback(msg):
@@ -24,8 +26,8 @@ def pose_callback(msg):
     dcm = tf.transformations.quaternion_matrix(q)
     data.dcm = dcm[0:3, 0:3]
     yaw = data.euler[2]
-    data.pose_2d = (msg.pose.pose.position.x, msg.pose.pose.position.y, yaw)
-    plotter.plot_trajectory( data.pose_2d )
+    data.pose_2d_ref = (msg.pose.pose.position.x, msg.pose.pose.position.y, yaw)
+    plotter.plot_trajectory( data.pose_2d_ref )
     return 0
 
 # sensor_msgs/LaserScan.msg
@@ -36,9 +38,11 @@ def scan_callback(msg):
     t_start = time.time()
     if msg.header.seq % 50 == 0:
         glogger.info("projection start, id = %d", msg.header.seq)
-    data.points_2d = lp.project(msg, data.scan_origin, data.dcm, downsample = 5)
+    data.points_2d_ref = data.points_2d
+    data.points_2d = lp.project(msg, data.scan_origin, data.dcm, downsample = 2)
     plotter.set_angle(msg.angle_min, msg.angle_max)
     plotter.plot_scan(data.points_2d)
+    # pose_2d = icp.match(data.points_2d)
     pose_2d = icp.match(data.points_2d)
     plotter.plot_trajectory2( pose_2d )
     dt += (time.time() - t_start)*1e6 # time consume in us
@@ -73,7 +77,8 @@ def tf_broadcaster():
 if __name__ == '__main__':
     global plotter, dt, data, icp
     data = DataContainer()
-    icp = SM_ICP()
+    # icp = SM_ICP()
+    icp = CSM_ICP()
     dt = 0
     glogger = get_glogger(0, __file__)
     rospy.init_node('slam_py', anonymous=True)

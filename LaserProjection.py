@@ -30,14 +30,16 @@ class LaserProjection:
             if i%downsample != 0 or r < self.range_min or r > self.range_max:
                 continue
             point = (r*np.cos(sita), r*np.sin(sita), 0)
-            # point = np.matmul(dcm, point)
+            point = np.matmul(dcm, point)
             # limit laser beam height to (-0.5, 0.5)m
             if point[2] < -0.5 or point[2] > 0.5:
                 continue
             point = np.add(point, origin)
             self.points_3d.append(point.tolist())
             sita = scan.angle_min + scan.angle_increment*i
-        self.points_2d = np.array(self.points_3d, dtype=np.float32)[: , 0:2]
+        # self.points_2d = np.array(self.points_3d, dtype=np.double)[: , 0:2]
+        points_3d = np.array(self.points_3d, dtype=np.double)[: , 0:2]
+        self.points_2d = np.ascontiguousarray(points_3d, dtype=np.double)
         return self.points_2d
 
 if __name__ == '__main__':
