@@ -30,7 +30,7 @@ class LaserProjection:
             if i%downsample != 0 or r < self.range_min or r > self.range_max:
                 continue
             point = (r*np.cos(sita), r*np.sin(sita), 0)
-            point = np.matmul(dcm, point)
+            # point = np.matmul(dcm, point)
             # limit laser beam height to (-0.5, 0.5)m
             if point[2] < -0.5 or point[2] > 0.5:
                 continue
